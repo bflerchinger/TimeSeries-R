@@ -1,0 +1,78 @@
+---
+title: "NNETAR"
+author: "Brett Flerchinger"
+date: "11/21/2022"
+description: Short example of fitting neural networks to time series data and plotting them using NNETAR.
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,message=FALSE,warning=FALSE}
+library(fpp3)
+```
+
+**Vector Auto Regressions**
+
+
+```{r}
+require(fpp3)
+aus_airpassengers
+```
+
+
+Fit an NNETAR() model, forecast 10 times steps
+
+```{r}
+fit <- aus_airpassengers %>%
+model(NNETAR(Passengers))
+report(fit)
+
+aus_airpassengers %>%
+  model(NNETAR(Passengers)) %>%
+  forecast(h=10) %>%
+  autoplot(aus_airpassengers)
+```
+
+
+Create training/test data, forecast your model using the NN.  
+
+```{r}
+train = subset(aus_airpassengers, Year < 2008)
+test = subset(aus_airpassengers, Year > 2007)
+
+train 
+test
+```
+
+```{r}
+fit2 <- train %>%
+model(NNETAR(Passengers)) %>%
+  forecast(h=9) 
+
+
+train %>%
+  model(NNETAR(Passengers)) %>%
+  forecast(h=9) %>%
+  autoplot(train)
+```
+
+```{r}
+train %>%
+  model(TSLM(Passengers ~ Year)) %>%
+  forecast(h=9) %>%
+  autoplot(train)
+
+fit3 <- train %>%
+model(TSLM(Passengers ~ Year)) %>%
+  forecast(h=9)
+```
+```{r}
+accuracy(fit2, test)
+accuracy(fit3, test)
+```
+
+The neural network had a lower RMSE than the time series regression model
