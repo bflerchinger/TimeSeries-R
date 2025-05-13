@@ -1,0 +1,452 @@
+---
+title: "Time Series Regression"
+author: "Brett Flerchinger"
+date: "10/21/2022"
+description: Applying regression models to time series data, utilizing techniques such as adding knots to create piecewise functions when applicable.
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,message=FALSE,warning=FALSE}
+library(fpp3)
+library(ggplot2)
+elec <- vic_elec %>%
+  filter(yearmonth(Time) == yearmonth("2014 Jan")) %>%
+  index_by(Date = as_date(Time)) %>%
+  summarise(
+    Demand = sum(Demand),
+    Temperature = max(Temperature)
+  )
+
+```
+
+
+```{r, message = FALSE}
+plot(elec$Temperature, elec$Demand)
+
+
+elec = as_tsibble(elec)
+fit_tslm <- elec %>%
+  model(TSLM(Demand ~ Temperature))
+
+report(fit_tslm)
+```
+
+
+
+```{r}
+elec = as_tsibble(elec)
+fit_tslm <- elec %>%
+  model(TSLM(Demand ~ Temperature))
+
+
+
+  
+augment(fit_tslm) %>%
+  ggplot(aes(x = .fitted, y = .resid)) +
+  geom_point() + labs(title="Residual vs. Fitted Plot")
+```
+The 6 values below -20000 appear to be outliers.  Other than that, the model seems adequate with no major problems with the residuals.
+
+
+```{r}
+elec %>%
+  model(TSLM(Demand ~ Temperature)) %>%
+  forecast(
+    new_data(elec, 1) %>%
+      mutate(Temperature = 15)
+  ) %>%
+  autoplot(elec)
+
+
+elec %>%
+  model(TSLM(Demand ~ Temperature)) %>%
+  forecast(
+    new_data(elec, 1) %>%
+      mutate(Temperature = 35)
+  ) %>%
+  autoplot(elec)
+
+```
+
+
+
+```{r}
+elec2 <- vic_elec %>%
+  index_by(Date = as_date(Time)) %>%
+  summarise(
+    Demand = sum(Demand),
+    Temperature = max(Temperature)
+  )
+
+plot(elec2$Demand, elec2$Temperature)
+```
+
+The model is only accurate for summer months.  Largely, lower temperatures mean higher electricity demands, but this is flipped when the temperature gets above 25.
+
+--------------------------------------------------------------------------------
+
+Data set olympic_running contains the winning times (in seconds) in each Olympic Games sprint, middle-distance and long-distance track events from 1896 to 2016.
+
+
+
+```{r, message = FALSE}
+require(fpp3)
+
+```
+```{r, message = FALSE}
+hundred = filter(olympic_running, Length == 100)
+two = filter(olympic_running, Length == 200)
+quarter = filter(olympic_running, Length == 400)
+half = filter(olympic_running, Length == 800)
+mile = filter(olympic_running, Length == 1500)
+five = filter(olympic_running, Length == 5000)
+ten = filter(olympic_running, Length == 10000)
+
+autoplot(hundred)
+autoplot(two)
+autoplot(quarter)
+autoplot(half)
+autoplot(mile)
+autoplot(five)
+autoplot(ten)
+autoplot(olympic_running)
+```
+Most events are decreasing, but inconsistently.  There are gap years in the men's events for when the Olympics were not held, and the women's events started later than the men's.
+
+
+
+```{r, warning = FALSE}
+
+  
+olympic2 <- as_tsibble(olympic_running)
+fit_olympic <- olympic2 %>%
+  model(TSLM(Time ~ Year))
+  report(fit_olympic)
+ 
+```
+
+```{r}
+augment(filter(fit_olympic, Length == 100, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Hundred"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 100, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Hundred"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 200, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Two Hundred"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 200, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Two Hundred"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 400, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Quarter"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 400, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Quarter"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 800, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Half"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 800, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Half"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 1500, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Mile"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 1500, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Mile"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 5000, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Five K"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 5000, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Five K"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+
+augment(filter(fit_olympic, Length == 10000, Sex == "men")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "M Ten K"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+augment(filter(fit_olympic, Length == 10000, Sex == "women")) %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = Time, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = NULL,
+  title = "W Ten K"
+  ) +
+  scale_colour_manual(values=c(Data="black",Fitted="red")) +
+  guides(colour = guide_legend(title = NULL))
+
+```
+
+
+
+```{r, warning = FALSE}
+
+augment(fit_olympic) %>%
+ggplot(aes(x = Year, y = .resid)) +
+geom_point() + labs(title="Residual vs. Fitted Plot")
+
+```
+
+The residuals tend to be positive in earlier year, then negative in later years.  This means our model under predicts in early years and over predicts in later years.  Creating knots could counteract this.
+
+
+
+Predictions for future winning times.
+
+```{r}
+fc_hundred <- forecast(filter(fit_olympic, Length == 100, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 100, Sex == "men")) +
+labs(
+title = "Forecast M Hundred",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 100, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 100, Sex == "women")) +
+labs(
+title = "Forecast W Hundred",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 200, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 200, Sex == "men")) +
+labs(
+title = "Forecast M Two Hundred",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 200, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 200, Sex == "women")) +
+labs(
+title = "Forecast W Two Hundred",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 400, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 400, Sex == "men")) +
+labs(
+title = "Forecast M Quarter",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 400, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 400, Sex == "women")) +
+labs(
+title = "Forecast W Quarter",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 1500, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 1500, Sex == "men")) +
+labs(
+title = "Forecast M Mile",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 1500, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 1500, Sex == "women")) +
+labs(
+title = "Forecast W Mile",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 5000, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 5000, Sex == "men")) +
+labs(
+title = "Forecast M Five K",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 5000, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 5000, Sex == "women")) +
+labs(
+title = "Forecast W 5K",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 10000, Sex == "men"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 10000, Sex == "men")) +
+labs(
+title = "Forecast M Ten K",
+y = "Time"
+)
+
+fc_hundred <- forecast(filter(fit_olympic, Length == 10000, Sex == "women"), h = 4)
+fc_hundred %>%
+  autoplot(filter(olympic_running, Length == 10000, Sex == "women")) +
+labs(
+title = "Forecast W Ten K",
+y = "Time"
+)
+
+```
+
+We are assuming that the winning Olympic times will continue decreasing in a linear fashion.  This may be somewhat accurate predicting 2020's times, but will not be accurate for extrapolation.
+
+
+--------------------------------------------------------------------------------
+
+The annual population of Afghanistan is available in the global_economy data set.
+
+```{r}
+prob6_data = global_economy %>%
+  filter(Country == "Afghanistan")
+
+
+
+```
+
+
+
+```{r, message = FALSE}
+autoplot(prob6_data, Population)
+```
+There is a clear decrease in population over the Soviet-Afghan War.
+
+
+
+```{r}
+pop <- as_tsibble(prob6_data)
+fit_pop <- pop %>%
+  model(TSLM(Population ~ Year))
+  report(fit_pop)
+  
+
+```
+
+```{r}
+fit_trends <- pop %>%
+model(
+piecewise = TSLM(Population ~ trend(knots = c(1980, 1989)))
+)
+fc_trends <- fit_trends %>% forecast(h=5)
+pop %>%
+autoplot(Population) +
+geom_line(data = fitted(fit_trends),
+aes(y = .fitted, colour = .model)) +
+autolayer(fc_trends, alpha = 0.5, level = 95) +
+labs(y = "Population",
+title = "Afghanistan population")
+
+
+
+
+fc_trends2 <- fit_pop %>% forecast(h=5)
+pop %>%
+autoplot(Population) +
+geom_line(data = fitted(fit_pop),
+aes(y = .fitted, colour = .model)) +
+autolayer(fc_trends2, alpha = 0.5, level = 95) +
+labs(y = "Population",
+title = "Afghanistan population")
+```
+
+The model with knots accounting for the war is much more accurate than the one without.
