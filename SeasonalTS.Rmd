@@ -1,0 +1,105 @@
+---
+title: "Seasonal Time Series"
+author: "Brett Flerchinger"
+date: "9/2/2022"
+description: 
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Using filter() to find what days corresponded to the peak closing price for each of the four stocks in gafa_stock.  
+
+```{r,message=FALSE,warning=FALSE}
+library(fpp3)
+gafa_stock %>% distinct(Symbol)
+
+google = filter(gafa_stock, Symbol == "GOOG")
+facebook = filter(gafa_stock, Symbol == "FB")
+amazon = filter(gafa_stock, Symbol == "AMZN")
+apple = filter(gafa_stock, Symbol == "AAPL")
+```
+
+```{r}
+maxApl = filter(apple, Close == max(apple$Close))
+maxApl
+maxGoog = filter(google, Close == max(google$Close))
+maxGoog
+maxAmz = filter(amazon, Close == max(amazon$Close))
+maxAmz
+maxFb = filter(facebook, Close == max(facebook$Close))
+maxFb
+```
+
+
+Time plot for the Demand from vic_elec.  
+
+
+```{r,message=FALSE,warning=FALSE}
+vic_elec %>% autoplot(Demand/1e3)+
+  labs(   y = "Demand (GW)", x = "Date", title = "Half-hourly electricity demand", subtitle = "Victoria, Australia"
+
+        )
+```
+
+There appears to be cyclicity with consistent high values in the middle of the year, and short, high spikes at the start and end of the year.  There does not appear to be any trend.
+
+
+--------------------------------------------------------------------------------
+
+
+```{r}
+set.seed(7)
+myseries <- aus_retail %>%
+  filter(`Series ID` == sample(aus_retail$`Series ID`,1))
+
+autoplot(myseries)
+gg_season(myseries)
+gg_subseries(myseries)
+gg_lag(myseries)
+
+```
+
+```{r}
+myseries %>%
+    ACF(Turnover, lag_max = 48) %>%
+    autoplot()
+```
+
+The data is trending upwards.  There does not appear to be much seasonality: January, March and December are slightly higher than the other months while February is lower, but it is only a slight difference.  There does appear to be cyclicity, however, with rapid spikes about 5 times per year.
+
+
+--------------------------------------------------------------------------------
+
+
+
+
+Daily changes in Google closing stock prices.
+
+```{r,message=FALSE, warning=FALSE}
+dgoog <- gafa_stock %>%
+  filter(Symbol == "GOOG", year(Date) >= 2018) %>%
+  mutate(trading_day = row_number()) %>%
+  update_tsibble(index = trading_day, regular = TRUE) %>%
+  mutate(diff = difference(Close))
+
+```
+
+
+
+Plot differences in ACF.
+
+```{r, warning = FALSE}
+autoplot(dgoog, diff)
+```
+```{r}
+autoplot(ACF(dgoog, diff, lag_max = 48))
+```
+
+
+
+
+The ACF values are very small, and are seemingly random with no evident patterns, so they are white noise as required for the model.
