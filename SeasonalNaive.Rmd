@@ -1,0 +1,381 @@
+---
+title: "Seasonal Naive"
+author: "Brett Flerchinger"
+date: "10/7/2022"
+description: Using the seasonal naive along with other benchmark methods to evaluate time series, along with plots, cross validation, and evaluation of error metrics.
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, message = FALSE, warning = FALSE}
+library(fpp3)
+fb <- gafa_stock %>%
+  filter(Symbol == "FB")
+
+fb <- fb %>%
+  mutate(trading_day = row_number()) %>%
+  update_tsibble(index = trading_day, regular = TRUE)
+
+
+```
+
+
+
+```{r}
+autoplot(fb, Close)
+```
+
+Drift method
+
+```{r}
+fb %>%
+model(RW(Close~drift())) %>%
+forecast(h = 100) %>%
+autoplot(fb) 
+```
+
+
+
+```{r}
+
+fb %>%
+model(RW(Close~drift())) %>%
+forecast(h = 100) %>%
+autoplot(fb) +
+geom_line(
+aes(y=Close),
+linetype = "dashed", color="blue",
+data = fb %>% filter(Date %in% range(Date))
+) 
+
+
+
+```
+
+
+
+```{r}
+fb %>%
+  model(mean = MEAN(Close))%>%
+  forecast(h=100) %>%
+autoplot(fb)
+
+
+fb %>%
+  model(`Naïve` = NAIVE(Close))%>%
+  forecast(h=100) %>%
+autoplot(fb)
+```
+
+--------------------------------------------------------------------------------
+
+Error metrics
+
+```{r, warning = FALSE, message = FALSE}
+# Extract data of interest
+recent_production <- aus_production %>%
+  filter(year(Quarter) >= 1992)
+# Define and estimate a model
+fit <- recent_production %>% model(SNAIVE(Beer))
+# Look at the residuals
+fit %>% gg_tsresiduals()
+
+attach(recent_production)
+qqnorm(Beer)
+qqline(Beer)
+```
+The residuals appear to be white noise from the ACF plot, however the qq-plot indicates non-normality.
+
+Seasonal naive method
+
+```{r}
+recent_production %>%
+  model(snaive = SNAIVE(Beer))%>%
+  forecast(h=10) %>%
+autoplot(recent_production)
+```
+
+```{r}
+dcmp <- recent_production %>%
+  model(STL(Beer))  %>%
+  components
+
+dcmp %>% autoplot
+```
+
+
+With the QQ-plot looking as it does, I suspected a downward trend. I used the STL decomposition to confirm this: the seasonal naive is likely fairly accurate, but will be overestimating values due to a slight downward trend in the data.
+
+--------------------------------------------------------------------------------
+
+
+
+
+```{r}
+aus_livestock %>% distinct(Animal)
+```
+
+
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Calves") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+
+```
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Bulls, bullocks and steers") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+
+```
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Cattle (excl. calves)") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+
+```
+
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Cows and heifers") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+```
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Lambs") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+
+```
+
+```{r}
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Pigs") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+```
+
+```{r}
+
+aus_livestock %>%
+  filter(State == "Victoria", Animal == "Sheep") %>%
+  model(snaive = SNAIVE(Count))%>%
+  forecast(h=10) %>%
+autoplot(aus_livestock)
+```
+'Lambs', 'calves', and 'bulls, bullocks, and steers' all seem to have trends that would throw off a seasonal naive prediction.  For the other 4 graphs, however, the seasonal naive should be a good benchmark for the series.
+
+
+--------------------------------------------------------------------------------
+
+
+
+```{r}
+tidy_bricks <- aus_production %>%
+  filter(!is.na(Bricks))
+```
+
+STL decomposition 
+
+```{r}
+dcmp <- tidy_bricks %>%
+  model(STL(Bricks))  %>%
+  components
+
+dcmp %>% autoplot
+
+```
+
+
+
+Compute and plot the seasonally adjusted data.
+
+```{r}
+dcmp %>% autoplot(season_adjust)
+```
+
+
+
+Naïve method forecasts
+
+```{r}
+season_fit <- dcmp %>%
+  select(-.model) %>%
+  model(naive = NAIVE(season_adjust)) %>%
+  forecast(h = "5 years")
+
+dcmp %>%
+  as_tsibble() %>%
+  autoplot(season_adjust )+ autolayer(season_fit)
+```
+
+
+decomposition_model() to reseasonalise the results
+
+```{r}
+fit <- tidy_bricks %>%
+  model(stl_mdl = decomposition_model(STL(log(Bricks)),NAIVE(season_adjust)))
+
+ 
+
+fit %>%
+  forecast(h = "5 years") %>%
+
+autoplot(tidy_bricks)
+```
+
+
+
+
+```{r, warning = FALSE}
+
+gg_tsresiduals(fit)
+```
+The residuals do not look uncorrelated.  The acf plot shows clear regions of positive values on the ends and negative values in the center, meaning nonindependent residuals.
+
+
+Robust STL decomposition.
+
+```{r}
+season_fit <- dcmp %>%
+  select(-.model) %>%
+  model(snaive = SNAIVE(season_adjust)) %>%
+  forecast(h = "5 years")
+
+dcmp %>%
+  as_tsibble() %>%
+  autoplot(season_adjust )+ autolayer(season_fit)
+```
+
+The robust model does not increase the seasonal forecast with the trend, while the decomposition_model version does increase with the trend.
+
+
+Compare forecasts from decomposition_model() with those from SNAIVE(), using a test set
+
+```{r}
+trainBricks = head(tidy_bricks, - 8)
+testBricks = tail(tidy_bricks, 8)
+testBricks
+trainBricks
+```
+```{r, warning = FALSE}
+gfit <- trainBricks %>%
+  model(
+    snaive = SNAIVE(Bricks),
+    stl_mdl = decomposition_model(STL(log(Bricks)),NAIVE(season_adjust))
+    )
+
+gfit %>%
+forecast(h = 8) %>%
+accuracy(tidy_bricks)
+```
+The STL has a lower RMSE, and is therefore better.
+
+--------------------------------------------------------------------------------
+
+```{r}
+takeaway <- aus_retail %>%
+  filter(Industry == "Takeaway food services") %>%
+  summarise(Turnover = sum(Turnover))
+
+```
+
+Create a training set 
+
+```{r}
+train = head(takeaway, - 48)
+
+```
+
+
+Benchmark methods
+
+```{r}
+season_fit <- train %>%
+  model(naive = NAIVE(Turnover)) %>%
+  forecast(h = 48)
+
+train %>%
+  as_tsibble() %>%
+  autoplot(Turnover)+ autolayer(season_fit)
+```
+```{r}
+season_fit <- train %>%
+  model(snaive = SNAIVE(Turnover)) %>%
+  forecast(h = 48)
+
+train %>%
+  as_tsibble() %>%
+  autoplot(Turnover)+ autolayer(season_fit)
+```
+
+```{r}
+season_fit <- train %>%
+  model(RW(Turnover~drift())) %>%
+  forecast(h = 48)
+
+train %>%
+  as_tsibble() %>%
+  autoplot(Turnover)+ autolayer(season_fit)
+```
+
+```{r}
+season_fit <- train %>%
+  model(Mean = MEAN(Turnover)) %>%
+  forecast(h = 48)
+
+train %>%
+  as_tsibble() %>%
+  autoplot(Turnover)+ autolayer(season_fit)
+```
+
+Accuracy checks 
+
+```{r, warning = FALSE}
+gfit <- train %>%
+  model(
+    Mean = MEAN(Turnover),
+    `Naïve` = NAIVE(Turnover),
+    snaive = SNAIVE(Turnover),
+    Drift = RW(Turnover ~ drift())
+)
+gfit %>%
+forecast(h = 48) %>%
+accuracy(takeaway)
+```
+
+The Naive method is the best with the lowest RMSE, and drift is a close second.
+
+
+
+
+```{r, warning = FALSE}
+train %>%
+model(Mean = MEAN(Turnover)) %>%
+gg_tsresiduals()
+```
+The residuals are far from white noise.  The acf plot is way out of bounds and decreasing steadily, the residuals are not evenly distributed around 0 and show an increasing linear trend, and the histogram does not look normal.  These violations of assumptions are a large part of the high RMSE of the mean model.
+
+
+```{r, warning = FALSE}
+train %>%
+model(Naive = NAIVE(Turnover)) %>%
+gg_tsresiduals()
+```
+
+The naive model has residuals that fan out, and significant lags at seasonal time points.  Although it has the best RMSE of the benchmark methods, there are still violated assumptions indicating the the model is not performing extremely well.
